@@ -1,42 +1,126 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>姐姐我怕怕 - 签到</title>
     <style>
         body {
-            font-family: system-ui, -apple-system, sans-serif;
-            max-width: 600px;
-            margin: 50px auto;
-            padding: 20px;
-            text-align: center;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f4f7f9;
+            color: #333;
         }
-        .success { color: #155724; background: #d4edda; padding: 12px; border-radius: 8px; }
-        .error { color: #721c24; background: #f8d7da; padding: 12px; border-radius: 8px; }
-        .loading { color: #856404; background: #fff3cd; padding: 12px; border-radius: 8px; }
+        .container {
+            text-align: center;
+            padding: 40px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-width: 500px;
+        }
+        h1 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        .loading { 
+            color: #856404; 
+            background: #fff3cd; 
+            border: 1px solid #ffeeba;
+        }
+        .success { 
+            color: #155724; 
+            background: #d4edda; 
+            border: 1px solid #c3e6cb;
+        }
+        .error { 
+            color: #721c24; 
+            background: #f8d7da; 
+            border: 1px solid #f5c6cb;
+        }
+        .hint {
+            margin-top: 25px;
+            font-size: 14px;
+            color: #666;
+            text-align: left;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+        }
+        code {
+            background: #eee;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
-    <h1>🤖 正在启动工作流...</h1>
-    <div id="status" class="loading">⏳ 正在触发，请稍候...</div>
+    <div class="container">
+        <h1>🤖 Automa 触发器</h1>
+        <p>正在尝试启动工作流，请稍候...</p>
+        
+        <div id="status" class="status loading">
+            ⏳ 正在初始化并检查环境...
+        </div>
+
+        <div class="hint">
+            <strong>故障排除提示：</strong>
+            <ul>
+                <li>请确保已安装并启用 Automa 扩展。</li>
+                <li>请确保工作流的 <code>Public ID</code> 设置为 <code>bing-workflow</code>。</li>
+                <li>如果首次访问失败，请尝试刷新页面。</li>
+            </ul>
+        </div>
+    </div>
 
     <script>
         const PUBLIC_ID = 'bing-workflow';
         const statusDiv = document.getElementById('status');
 
-        // 页面加载完成后自动触发
-        window.addEventListener('load', function() {
+        /**
+         * 核心触发函数
+         * 增加了延迟以确保 Automa 扩展已加载完成
+         */
+        function triggerWorkflow() {
             try {
-                // 发送触发信号
+                // 检查 Automa 运行环境是否存在
+                if (!window.chrome || !window.chrome.runtime) {
+                    throw new Error('Automa 扩展似乎未激活或不在支持的浏览器环境中。');
+                }
+
+                // 发送自定义事件给 Automa
                 window.dispatchEvent(new CustomEvent('automa:execute-workflow', {
                     detail: { publicId: PUBLIC_ID }
                 }));
-                statusDiv.className = 'success';
-                statusDiv.innerHTML = '✅ 触发信号已发送！工作流将在目标页面运行。<br>如果工作流没有执行，请确保：<br>1. 工作流已导入为本地工作流<br>2. 工作流 Public ID 设置为 "bing-workflow"<br>3. 工作流开头有「新建标签页」模块打开 bing.com';
-            } catch(e) {
-                statusDiv.className = 'error';
-                statusDiv.innerHTML = '❌ 触发失败：' + e.message + '<br>请确保 Automa 扩展已安装并启用。';
+
+                statusDiv.className = 'status success';
+                statusDiv.innerHTML = `
+                    ✅ 触发信号已成功发送！<br>
+                    工作流应在后台开始执行。<br>
+                    <small>（如果没反应，请检查 Automa 工作流配置）</small>
+                `;
+            } catch (e) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = `❌ 触发失败：${e.message}<br>请尝试刷新页面或检查扩展状态。`;
+                console.error('Automa Trigger Error:', e);
             }
+        }
+
+        // 页面加载完成后，延迟执行触发
+        // 延迟是为了确保 Automa 的背景脚本已注入完毕
+        window.addEventListener('load', () => {
+            // 设置一个合理的延迟（2秒），解决“首次加载不触发”的问题
+            setTimeout(triggerWorkflow, 4000);
         });
     </script>
 </body>
