@@ -117,16 +117,10 @@
         }
 
         // 页面加载完成后，延迟执行触发
+        // 延迟是为了确保 Automa 的背景脚本已注入完毕
         window.addEventListener('load', () => {
-            // 原有触发逻辑（保持不变）
+            // 设置一个合理的延迟（2秒），解决“首次加载不触发”的问题
             setTimeout(triggerWorkflow, 4000);
-
-            // ✅ 新增：8 秒后仍未成功则自动重载
-            setTimeout(() => {
-                if (statusDiv.classList.contains('loading')) {
-                    location.reload(true);
-                }
-            }, 8000);
         });
     </script>
 </body>
