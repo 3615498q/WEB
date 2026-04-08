@@ -21,7 +21,7 @@
             background: white;
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            max-width: 500px;
+            max-width: 520px;
         }
         h1 {
             margin-top: 0;
@@ -62,23 +62,39 @@
             padding: 2px 6px;
             border-radius: 4px;
         }
+        button {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🤖 姐姐我怕怕 - 签到</h1>
         <p>正在尝试启动工作流，请稍候...</p>
-        
+
         <div id="status" class="status loading">
             ⏳ 正在初始化并检查环境...
         </div>
+
+        <button onclick="location.reload()">🔄 手动重载并重试</button>
 
         <div class="hint">
             <strong>故障排除提示：</strong>
             <ul>
                 <li>请确保已安装并启用 Automa 扩展。</li>
                 <li>请确保工作流的 <code>Public ID</code> 设置为 <code>bing-workflow</code>。</li>
-                <li>如果首次访问失败，请尝试刷新页面。</li>
+                <li>如果上传图片后未触发，本页面会自动重试。</li>
+                <li>若仍无效，请点击“手动重载并重试”。</li>
             </ul>
         </div>
     </div>
@@ -87,40 +103,61 @@
         const PUBLIC_ID = 'bing-workflow';
         const statusDiv = document.getElementById('status');
 
-        /**
-         * 核心触发函数
-         * 增加了延迟以确保 Automa 扩展已加载完成
-         */
+        let retryCount = 0;
+        const MAX_RETRIES = 6;
+        const RETRY_DELAY = 3000;
+
         function triggerWorkflow() {
             try {
-                // 检查 Automa 运行环境是否存在
                 if (!window.chrome || !window.chrome.runtime) {
-                    throw new Error('Automa 扩展似乎未激活或不在支持的浏览器环境中。');
+                    throw new Error('Automa 扩展未检测到');
                 }
 
-                // 发送自定义事件给 Automa
                 window.dispatchEvent(new CustomEvent('automa:execute-workflow', {
                     detail: { publicId: PUBLIC_ID }
                 }));
 
                 statusDiv.className = 'status success';
                 statusDiv.innerHTML = `
-                    ✅ 触发信号已成功发送！<br>
-                    工作流应在后台开始执行。<br>
-                    <small>（如果没反应，请检查 Automa 工作流配置）</small>
+                    ✅ 触发信号已发送（第 ${retryCount + 1} 次）<br>
+                    工作流应在后台执行<br>
+                    <small>如未执行，请检查 Automa 工作流配置</small>
                 `;
+
+                console.log('✅ Automa 工作流触发成功');
             } catch (e) {
-                statusDiv.className = 'status error';
-                statusDiv.innerHTML = `❌ 触发失败：${e.message}<br>请尝试刷新页面或检查扩展状态。`;
-                console.error('Automa Trigger Error:', e);
+                retryCount++;
+
+                if (retryCount < MAX_RETRIES) {
+                    statusDiv.className = 'status loading';
+                    statusDiv.innerHTML = `⏳ 第 ${retryCount + 1} 次尝试触发...`;
+                    console.warn('⚠️ Automa 触发失败，准备重试：', e.message);
+                    setTimeout(triggerWorkflow, RETRY_DELAY);
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.innerHTML = `❌ 多次尝试失败：${e.message}<br>请尝试手动重载`;
+                    console.error('❌ Automa Trigger Error:', e);
+                }
             }
         }
 
-        // 页面加载完成后，延迟执行触发
-        // 延迟是为了确保 Automa 的背景脚本已注入完毕
+        // 页面加载后触发
         window.addEventListener('load', () => {
-            // 设置一个合理的延迟（2秒），解决“首次加载不触发”的问题
-            setTimeout(triggerWorkflow, 4000);
+            setTimeout(triggerWorkflow, 2000);
+        });
+
+        // 监听 DOM 变化（上传图片后页面更新）
+        const observer = new MutationObserver(() => {
+            // 避免无限触发
+            if (retryCount < MAX_RETRIES) {
+                console.log('🔄 检测到页面变化，尝试重新触发工作流');
+                triggerWorkflow();
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
         });
     </script>
 </body>
