@@ -68,7 +68,7 @@
     <div class="container">
         <h1>🤖 姐姐我怕怕 - 签到</h1>
         <p>正在尝试启动工作流，请稍候...</p>
-        
+
         <div id="status" class="status loading">
             ⏳ 正在初始化并检查环境...
         </div>
@@ -87,41 +87,53 @@
         const PUBLIC_ID = 'bing-workflow';
         const statusDiv = document.getElementById('status');
 
-        /**
-         * 核心触发函数
-         * 增加了延迟以确保 Automa 扩展已加载完成
-         */
-        function triggerWorkflow() {
-            try {
-                // 检查 Automa 运行环境是否存在
-                if (!window.chrome || !window.chrome.runtime) {
-                    throw new Error('Automa 扩展似乎未激活或不在支持的浏览器环境中。');
+        // 防止无限刷新
+        if (sessionStorage.getItem('automa_reloaded')) {
+            statusDiv.className = 'status error';
+            statusDiv.innerHTML = '❌ 已自动重载一次仍失败，请检查 Automa 扩展状态。';
+        } else {
+            function triggerWorkflow() {
+                try {
+                    if (!chrome?.runtime) {
+                        throw new Error('Automa 扩展未检测到');
+                    }
+
+                    chrome.runtime.sendMessage(
+                        'infppggnoaenmfagbfknfkancpbljcca', // Automa Extension ID
+                        {
+                            type: 'execute-workflow',
+                            data: { publicId: PUBLIC_ID }
+                        },
+                        res => {
+                            if (res?.success) {
+                                statusDiv.className = 'status success';
+                                statusDiv.innerHTML = `
+                                    ✅ 触发信号已成功发送！<br>
+                                    工作流应在后台开始执行。<br>
+                                    <small>（如果没反应，请检查 Automa 工作流配置）</small>
+                                `;
+                            } else {
+                                throw new Error('Automa 返回失败');
+                            }
+                        }
+                    );
+
+                    // 超时兜底
+                    setTimeout(() => {
+                        sessionStorage.setItem('automa_reloaded', '1');
+                        location.reload(true);
+                    }, 6000);
+
+                } catch (e) {
+                    sessionStorage.setItem('automa_reloaded', '1');
+                    location.reload(true);
                 }
-
-                // 发送自定义事件给 Automa
-                window.dispatchEvent(new CustomEvent('automa:execute-workflow', {
-                    detail: { publicId: PUBLIC_ID }
-                }));
-
-                statusDiv.className = 'status success';
-                statusDiv.innerHTML = `
-                    ✅ 触发信号已成功发送！<br>
-                    工作流应在后台开始执行。<br>
-                    <small>（如果没反应，请检查 Automa 工作流配置）</small>
-                `;
-            } catch (e) {
-                statusDiv.className = 'status error';
-                statusDiv.innerHTML = `❌ 触发失败：${e.message}<br>请尝试刷新页面或检查扩展状态。`;
-                console.error('Automa Trigger Error:', e);
             }
-        }
 
-        // 页面加载完成后，延迟执行触发
-        // 延迟是为了确保 Automa 的背景脚本已注入完毕
-        window.addEventListener('load', () => {
-            // 设置一个合理的延迟（2秒），解决“首次加载不触发”的问题
-            setTimeout(triggerWorkflow, 4000);
-        });
+            window.addEventListener('load', () => {
+                setTimeout(triggerWorkflow, 3000);
+            });
+        }
     </script>
 </body>
 </html>
