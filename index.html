@@ -49,11 +49,6 @@
             background: #f8d7da; 
             border: 1px solid #f5c6cb;
         }
-        .warning {
-            color: #856404;
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-        }
         .hint {
             margin-top: 25px;
             font-size: 14px;
@@ -66,29 +61,6 @@
             background: #eee;
             padding: 2px 6px;
             border-radius: 4px;
-        }
-        .btn {
-            margin-top: 12px;
-            padding: 8px 16px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .btn:hover {
-            background-color: #0056b3;
-        }
-        .btn:disabled {
-            background-color: #6c757d;
-            cursor: not-allowed;
-        }
-        .btn.retry {
-            background-color: #28a745;
-        }
-        .btn.retry:hover {
-            background-color: #1e7e34;
         }
     </style>
 </head>
@@ -114,144 +86,41 @@
     <script>
         const PUBLIC_ID = 'bing-workflow';
         const statusDiv = document.getElementById('status');
-        let attemptCount = 0;
-        let maxAttempts = 5; // 最多尝试5次（每次10秒间隔）
-        let isChecking = false;
-        let successDetected = false;
-
-        // ✅ 关键：监听新窗口打开事件（Automa 成功时会 open 新标签页）
-        const originalOpen = window.open;
-        window.open = function(url, target, features) {
-            // 检测是否是 Automa 触发的签到页面（根据你的截图，标题含"姐姐我怕怕 - 签到"）
-            if (url && url.includes('github.io') && target === '_blank') {
-                console.log('[Automa] 检测到新标签页打开:', url);
-                successDetected = true;
-                statusDiv.className = 'status success';
-                statusDiv.innerHTML = `
-                    ✅ 工作流已成功触发！<br>
-                    新标签页已打开（签到已完成）。<br>
-                    <small>无需重复操作</small>
-                `;
-                // 恢复原生 open
-                window.open = originalOpen;
-            }
-            return originalOpen.apply(this, arguments);
-        };
 
         /**
-         * 尝试触发工作流
+         * 核心触发函数
+         * 增加了延迟以确保 Automa 扩展已加载完成
          */
-        function tryTrigger() {
-            attemptCount++;
-            statusDiv.className = 'status warning';
-            statusDiv.innerHTML = `🔄 尝试第 ${attemptCount}/${maxAttempts} 次...`;
-
+        function triggerWorkflow() {
             try {
+                // 检查 Automa 运行环境是否存在
                 if (!window.chrome || !window.chrome.runtime) {
-                    throw new Error('Automa 扩展未激活或浏览器不支持');
+                    throw new Error('Automa 扩展似乎未激活或不在支持的浏览器环境中。');
                 }
 
-                // 发送触发事件
+                // 发送自定义事件给 Automa
                 window.dispatchEvent(new CustomEvent('automa:execute-workflow', {
                     detail: { publicId: PUBLIC_ID }
                 }));
 
-                console.log(`[Trigger] 第 ${attemptCount} 次触发信号已发送`);
-
+                statusDiv.className = 'status success';
+                statusDiv.innerHTML = `
+                    ✅ 触发信号已成功发送！<br>
+                    工作流应在后台开始执行。<br>
+                    <small>（如果没反应，请检查 Automa 工作流配置）</small>
+                `;
             } catch (e) {
                 statusDiv.className = 'status error';
-                statusDiv.innerHTML = `❌ 触发失败 (${attemptCount}/${maxAttempts})：<br>${e.message}`;
-                return false;
+                statusDiv.innerHTML = `❌ 触发失败：${e.message}<br>请尝试刷新页面或检查扩展状态。`;
+                console.error('Automa Trigger Error:', e);
             }
-
-            return true;
         }
 
-        /**
-         * 检查是否已有新标签页打开（通过 window.open 拦截 + 标题检测）
-         */
-        function checkForSuccess() {
-            // 方案1: 检查是否有新窗口（更可靠）
-            const windows = window.screenX !== undefined ? 
-                Array.from(window.opener ? [window.opener] : []) : [];
-            
-            // 方案2: 监听所有打开的窗口（实际不可行，但我们可以依赖上面的 window.open hook）
-            // 所以主要靠前面的 window.open 拦截
-            
-            // 方案3: 检查当前页面是否已被跳转（非必需）
-            if (successDetected) {
-                return true;
-            }
-
-            // 方案4: 检查是否有其他标签页包含目标标题（需权限，不可靠）
-            // → 放弃，改用简单策略：只要触发后 3 秒内没成功，就重试
-
-            return false;
-        }
-
-        /**
-         * 主循环：定时重试直到成功或超时
-         */
-        function startRetryLoop() {
-            if (isChecking) return;
-            isChecking = true;
-
-            const interval = setInterval(() => {
-                if (successDetected) {
-                    clearInterval(interval);
-                    isChecking = false;
-                    return;
-                }
-
-                if (attemptCount < maxAttempts) {
-                    tryTrigger();
-                } else {
-                    clearInterval(interval);
-                    isChecking = false;
-                    
-                    if (!successDetected) {
-                        statusDiv.className = 'status error';
-                        statusDiv.innerHTML = `
-                            ❌ 多次尝试均未触发工作流<br>
-                            请检查：<br>
-                            • Automa 是否已启用<br>
-                            • 工作流 Public ID 是否为 <code>bing-workflow</code><br>
-                            • 浏览器是否阻止了弹窗（允许弹出窗口）<br>
-                            <button class="btn retry" onclick="location.reload()">🔄 刷新重试</button>
-                        `;
-                    }
-                }
-            }, 10000); // 每10秒尝试一次
-
-            // 首次立即触发（不等待）
-            setTimeout(() => {
-                if (!successDetected) tryTrigger();
-            }, 500);
-        }
-
-        // 页面加载完成后启动重试机制
+        // 页面加载完成后，延迟执行触发
+        // 延迟是为了确保 Automa 的背景脚本已注入完毕
         window.addEventListener('load', () => {
-            statusDiv.innerHTML = '⏳ 正在检测 Automa 环境...';
-            
-            // 等待 1 秒确保扩展注入（比 4s 更合理，避免过长等待）
-            setTimeout(startRetryLoop, 4000);
-        });
-
-        // ✅ 可选：添加手动重试按钮（增强用户体验）
-        window.addEventListener('DOMContentLoaded', () => {
-            const btn = document.createElement('button');
-            btn.className = 'btn retry';
-            btn.textContent = '手动重试';
-            btn.style.marginTop = '12px';
-            btn.onclick = () => {
-                if (attemptCount >= maxAttempts) {
-                    alert('已达最大重试次数，请刷新页面重新开始');
-                    return;
-                }
-                statusDiv.innerHTML += '<br>➡️ 手动重试中...';
-                tryTrigger();
-            };
-            document.querySelector('.container').appendChild(btn);
+            // 设置一个合理的延迟（2秒），解决“首次加载不触发”的问题
+            setTimeout(triggerWorkflow, 4000);
         });
     </script>
 </body>
